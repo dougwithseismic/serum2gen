@@ -1,5 +1,6 @@
 """Variation generator — creates preset variations from templates."""
 
+import functools
 import math
 import random
 from pathlib import Path
@@ -18,15 +19,16 @@ from .enums import (
 from .paths import find_wavetables as _find_wavetables
 
 
-def _get_wavetables() -> list[str]:
-    """Return available wavetables, preferring the live filesystem scan."""
+@functools.lru_cache(maxsize=1)
+def _get_wavetables() -> tuple[str, ...]:
+    """Return available wavetables, cached after first call. Filesystem first, static fallback."""
     try:
         live = _find_wavetables()
         if live:
-            return live
+            return tuple(live)
     except Exception:
         pass
-    return _STATIC_WAVETABLES
+    return tuple(_STATIC_WAVETABLES)
 
 MACRO_NAMES = [
     "CUTOFF", "RESONANCE", "DRIVE", "WARP", "DETUNE",

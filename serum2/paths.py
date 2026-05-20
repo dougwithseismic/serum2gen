@@ -35,6 +35,35 @@ def get_user_folder() -> Path | None:
     return user
 
 
+def _sibling_folder(*parts: str) -> Path | None:
+    root = get_preset_root()
+    if root is None:
+        return None
+    folder = root.parent.joinpath(*parts)
+    return folder if folder.exists() else None
+
+
+def _find_files(
+    root_fn,
+    extensions: tuple[str, ...],
+    root: Path | None = None,
+    category: str | None = None,
+) -> list[str]:
+    if root is None:
+        root = root_fn()
+    if root is None or not root.exists():
+        return []
+    search_root = root
+    if category:
+        search_root = root / category
+        if not search_root.exists():
+            return []
+    results = set()
+    for ext in extensions:
+        results.update(str(p.relative_to(root)) for p in search_root.glob(f"**/{ext}"))
+    return sorted(results)
+
+
 def find_presets(root: Path | None = None, pattern: str = "**/*.SerumPreset") -> list[Path]:
     if root is None:
         root = get_preset_root()
@@ -44,83 +73,27 @@ def find_presets(root: Path | None = None, pattern: str = "**/*.SerumPreset") ->
 
 
 def get_tables_root() -> Path | None:
-    """Return the Tables/ folder (sibling of Presets/)."""
-    root = get_preset_root()
-    if root is None:
-        return None
-    tables = root.parent / "Tables"
-    return tables if tables.exists() else None
+    return _sibling_folder("Tables")
 
 
 def find_wavetables(root: Path | None = None, category: str | None = None) -> list[str]:
-    """Find .wav wavetable files, returning paths relative to the Tables/ root.
-
-    If *category* is given, only return tables in that subfolder.
-    """
-    if root is None:
-        root = get_tables_root()
-    if root is None or not root.exists():
-        return []
-    if category:
-        search_root = root / category
-        if not search_root.exists():
-            return []
-    else:
-        search_root = root
-    return sorted(
-        str(p.relative_to(root)) for p in search_root.glob("**/*.wav")
-    )
+    return _find_files(get_tables_root, ("*.wav",), root, category)
 
 
 def get_noises_root() -> Path | None:
-    """Return the Noises/ folder inside Samples/Factory Non-Tonal/."""
-    root = get_preset_root()
-    if root is None:
-        return None
-    noises = root.parent / "Samples" / "Factory Non-Tonal" / "Noises"
-    return noises if noises.exists() else None
+    return _sibling_folder("Samples", "Factory Non-Tonal", "Noises")
 
 
 def find_noise_samples(root: Path | None = None, category: str | None = None) -> list[str]:
-    """Find noise sample files (.wav/.aif/.flac), returning paths relative to the Noises/ root."""
-    if root is None:
-        root = get_noises_root()
-    if root is None or not root.exists():
-        return []
-    if category:
-        search_root = root / category
-        if not search_root.exists():
-            return []
-    else:
-        search_root = root
-    results = []
-    for ext in ("*.wav", "*.aif", "*.flac"):
-        results.extend(str(p.relative_to(root)) for p in search_root.glob(f"**/{ext}"))
-    return sorted(results)
+    return _find_files(get_noises_root, ("*.wav", "*.aif", "*.flac"), root, category)
 
 
 def find_arp_patterns(root: Path | None = None) -> list[str]:
-    """Find .XferArp arpeggiator pattern files."""
-    if root is None:
-        preset_root = get_preset_root()
-        if preset_root is None:
-            return []
-        root = preset_root.parent / "Arp Patterns"
-    if not root.exists():
-        return []
-    return sorted(str(p.relative_to(root)) for p in root.glob("**/*.XferArp"))
+    return _find_files(lambda: _sibling_folder("Arp Patterns"), ("*.XferArp",), root)
 
 
 def find_clips(root: Path | None = None) -> list[str]:
-    """Find .XferClip clip files."""
-    if root is None:
-        preset_root = get_preset_root()
-        if preset_root is None:
-            return []
-        root = preset_root.parent / "Clips"
-    if not root.exists():
-        return []
-    return sorted(str(p.relative_to(root)) for p in root.glob("**/*.XferClip"))
+    return _find_files(lambda: _sibling_folder("Clips"), ("*.XferClip",), root)
 
 
 def resolve_preset(name_or_path: str) -> Path | None:

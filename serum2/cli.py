@@ -33,6 +33,14 @@ def _output_path(preset_path: Path, output: str | None) -> Path:
     return preset_path
 
 
+def _validate_index(value: int, label: str, lo: int, hi: int) -> int:
+    data_idx = value - 1
+    if not lo <= data_idx <= hi:
+        click.echo(f"{label} index must be {lo + 1}-{hi + 1}", err=True)
+        sys.exit(1)
+    return data_idx
+
+
 @click.group()
 @click.version_option(version="0.1.0")
 def cli():
@@ -376,11 +384,7 @@ def macro_list(preset_path):
 def macro_set(preset_path, index, name, value, output):
     """Set a macro's name and/or value. Index is 1-8 (UI numbering)."""
     preset, resolved = _load(preset_path)
-    data_idx = index - 1
-    if not 0 <= data_idx <= 7:
-        click.echo("Macro index must be 1-8", err=True)
-        sys.exit(1)
-
+    data_idx = _validate_index(index, "Macro", 0, 7)
     preset.set_macro(data_idx, name=name, value=value)
     out = _output_path(resolved, output)
     preset.save(out)
@@ -419,11 +423,7 @@ def env_list(preset_path):
 def env_set(preset_path, index, attack, decay, sustain, release, output):
     """Set envelope ADSR. Index is 1-4 (UI numbering)."""
     preset, resolved = _load(preset_path)
-    data_idx = index - 1
-    if not 0 <= data_idx <= 3:
-        click.echo("Envelope index must be 1-4", err=True)
-        sys.exit(1)
-
+    data_idx = _validate_index(index, "Envelope", 0, 3)
     preset.set_envelope(data_idx, attack=attack, decay=decay, sustain=sustain, release=release)
     out = _output_path(resolved, output)
     preset.save(out)
@@ -465,11 +465,7 @@ def lfo_list(preset_path):
 def lfo_set(preset_path, index, rate, mode, lfo_type, smooth, output):
     """Set LFO parameters. Index is 1-10 (UI numbering)."""
     preset, resolved = _load(preset_path)
-    data_idx = index - 1
-    if not 0 <= data_idx <= 9:
-        click.echo("LFO index must be 1-10", err=True)
-        sys.exit(1)
-
+    data_idx = _validate_index(index, "LFO", 0, 9)
     kwargs = {}
     if rate is not None:
         kwargs["rate"] = rate
@@ -732,10 +728,7 @@ def wt_list(category):
 def wt_get(preset_path, osc):
     """Show wavetable for an oscillator. OSC is 1-5 (UI numbering)."""
     preset, _ = _load(preset_path)
-    data_idx = osc - 1
-    if not 0 <= data_idx <= 4:
-        click.echo("Oscillator index must be 1-5", err=True)
-        sys.exit(1)
+    data_idx = _validate_index(osc, "Oscillator", 0, 4)
     wt_path = preset.get_wavetable(data_idx)
     if wt_path is None:
         click.echo(f"OSC {osc}: no wavetable assigned")
@@ -751,10 +744,7 @@ def wt_get(preset_path, osc):
 def wt_set(preset_path, osc, table, output):
     """Assign a wavetable to an oscillator. OSC is 1-5 (UI numbering)."""
     preset, resolved = _load(preset_path)
-    data_idx = osc - 1
-    if not 0 <= data_idx <= 4:
-        click.echo("Oscillator index must be 1-5", err=True)
-        sys.exit(1)
+    data_idx = _validate_index(osc, "Oscillator", 0, 4)
     preset.set_wavetable(data_idx, table)
     out = _output_path(resolved, output)
     preset.save(out)
@@ -788,10 +778,7 @@ def noise_list(category):
 def noise_get(preset_path, osc):
     """Show noise sample for an oscillator. OSC is 1-5 (UI numbering)."""
     preset, _ = _load(preset_path)
-    data_idx = osc - 1
-    if not 0 <= data_idx <= 4:
-        click.echo("Oscillator index must be 1-5", err=True)
-        sys.exit(1)
+    data_idx = _validate_index(osc, "Oscillator", 0, 4)
     noise_path = preset.get_noise(data_idx)
     if noise_path is None:
         click.echo(f"OSC {osc}: no noise sample assigned")
@@ -807,10 +794,7 @@ def noise_get(preset_path, osc):
 def noise_set(preset_path, osc, sample, output):
     """Assign a noise sample to an oscillator. OSC is 1-5 (UI numbering)."""
     preset, resolved = _load(preset_path)
-    data_idx = osc - 1
-    if not 0 <= data_idx <= 4:
-        click.echo("Oscillator index must be 1-5", err=True)
-        sys.exit(1)
+    data_idx = _validate_index(osc, "Oscillator", 0, 4)
     preset.set_noise(data_idx, sample)
     out = _output_path(resolved, output)
     preset.save(out)
@@ -968,12 +952,12 @@ def ml_generate(model_path, count, template, output):
             sys.exit(1)
         template_preset = Preset.load(resolved)
     else:
-        # Use first available factory preset as template
-        presets = find_presets()
-        if not presets:
+        root = get_preset_root()
+        first = next(root.glob("**/*.SerumPreset"), None) if root else None
+        if first is None:
             click.echo("No factory presets found. Pass --template.", err=True)
             sys.exit(1)
-        template_preset = Preset.load(presets[0])
+        template_preset = Preset.load(first)
 
     click.echo(f"Generating {count} presets from model: {model_path}")
 

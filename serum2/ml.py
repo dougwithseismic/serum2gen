@@ -154,6 +154,7 @@ def load_dataset(presets_dir: Path) -> "tuple[np.ndarray, list[Path]]":
 
     rows = []
     valid_paths = []
+    skipped = 0
     for p in preset_paths:
         try:
             preset = Preset.load(p)
@@ -161,10 +162,14 @@ def load_dataset(presets_dir: Path) -> "tuple[np.ndarray, list[Path]]":
             rows.append(vec)
             valid_paths.append(p)
         except Exception:
+            skipped += 1
             continue
 
     if not rows:
-        raise RuntimeError(f"No valid presets could be loaded from {presets_dir}")
+        raise RuntimeError(f"No valid presets could be loaded from {presets_dir} ({skipped} skipped)")
+    if skipped > 0:
+        import sys
+        print(f"Loaded {len(rows)} presets ({skipped} skipped)", file=sys.stderr)
 
     return np.stack(rows), valid_paths
 
@@ -277,13 +282,13 @@ class PresetVAE:
 # ── Loss function ────────────────────────────────────────────────────
 
 
-def vae_loss(recon_x, x, mu, log_var):
+def vae_loss(recon_x, x, mu, log_var, _torch=None):
     """Compute VAE loss = reconstruction (MSE) + KL divergence."""
-    torch = _require_torch()
-    import torch.nn.functional as F
-
+    if _torch is None:
+        _torch = _require_torch()
+    F = _torch.nn.functional
     recon_loss = F.mse_loss(recon_x, x, reduction="sum")
-    kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+    kl_loss = -0.5 * _torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
     return recon_loss + kl_loss
 
 
@@ -324,7 +329,7 @@ def train_vae(
         for i in range(0, n_samples, batch_size):
             batch = dataset[perm[i:i + batch_size]]
             recon, mu, log_var = model.forward(batch)
-            loss = vae_loss(recon, batch, mu, log_var)
+            loss = vae_loss(recon, batch, mu, log_var, _torch=torch)
 
             optimizer.zero_grad()
             loss.backward()
@@ -353,26 +358,29 @@ def train_vae(
 
 
 def save_model(model: PresetVAE, metadata: dict, path: str | Path) -> None:
-    """Save model weights and metadata to a .pt file."""
+    """Save model weights (.pt) and metadata (.json sidecar)."""
+    import json
     torch = _require_torch()
-    torch.save({
-        "state_dict": model.state_dict(),
-        "metadata": metadata,
-    }, str(path))
+    path = Path(path)
+    torch.save(model.state_dict(), str(path))
+    meta_path = path.with_suffix(".json")
+    meta_path.write_text(json.dumps(metadata, indent=2))
 
 
 def load_model(path: str | Path) -> "tuple[PresetVAE, dict]":
-    """Load model weights and metadata from a .pt file."""
+    """Load model weights (.pt) and metadata (.json sidecar)."""
+    import json
     torch = _require_torch()
-    checkpoint = torch.load(str(path), map_location="cpu", weights_only=False)
-    metadata = checkpoint["metadata"]
+    path = Path(path)
+    meta_path = path.with_suffix(".json")
+    metadata = json.loads(meta_path.read_text())
 
     model = PresetVAE(
         metadata["input_dim"],
         metadata["latent_dim"],
         metadata["hidden_dim"],
     )
-    model.load_state_dict(checkpoint["state_dict"])
+    model.load_state_dict(torch.load(str(path), map_location="cpu", weights_only=True))
     model.eval()
     return model, metadata
 
@@ -445,16 +453,15 @@ def interpolate(
         mu_a, _ = model.encode(ta)
         mu_b, _ = model.encode(tb)
 
+    alphas = [i / max(1, steps - 1) for i in range(steps)]
+    z_batch = torch.stack([(1 - t) * mu_a.squeeze(0) + t * mu_b.squeeze(0) for t in alphas])
+
+    with torch.no_grad():
+        decoded_batch = model.decode(z_batch).numpy()
+
     presets = []
     for i in range(steps):
-        t = i / max(1, steps - 1)
-        z = (1 - t) * mu_a + t * mu_b
-
-        with torch.no_grad():
-            decoded = model.decode(z).squeeze(0).numpy()
-
-        # Use preset_a as template for structure
-        p = features_to_preset(decoded, preset_a)
+        p = features_to_preset(decoded_batch[i], preset_a)
         p.name = f"Interp {i:03d}/{steps}"
         p.description = f"Interpolation step {i}/{steps} between {preset_a.name} and {preset_b.name}"
         presets.append(p)
@@ -481,23 +488,17 @@ def find_similar(
 
     model.eval()
 
-    # Encode target
     feat_target = extract_features(target_preset)
+    all_feats = np.stack([extract_features(p) for p in all_presets])
+    all_with_target = np.vstack([feat_target.reshape(1, -1), all_feats])
+
     with torch.no_grad():
-        t_target = torch.tensor(feat_target, dtype=torch.float32).unsqueeze(0)
-        mu_target, _ = model.encode(t_target)
-        mu_target = mu_target.squeeze(0).numpy()
+        t_all = torch.tensor(all_with_target, dtype=torch.float32)
+        mu_all, _ = model.encode(t_all)
+        mu_all = mu_all.numpy()
 
-    # Encode all candidates
-    distances = []
-    for preset in all_presets:
-        feat = extract_features(preset)
-        with torch.no_grad():
-            t = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
-            mu, _ = model.encode(t)
-            mu = mu.squeeze(0).numpy()
-        dist = float(np.linalg.norm(mu_target - mu))
-        distances.append((preset, dist))
+    mu_target = mu_all[0]
+    dists = np.linalg.norm(mu_all[1:] - mu_target, axis=1)
 
-    distances.sort(key=lambda x: x[1])
-    return distances[:n]
+    indices = np.argsort(dists)[:n]
+    return [(all_presets[i], float(dists[i])) for i in indices]
