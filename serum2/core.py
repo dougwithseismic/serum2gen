@@ -9,6 +9,9 @@ import cbor2
 import zstandard
 
 
+_HEADER_SIZE = 17  # 8 magic + 1 null + 2 json_len + 6 padding
+
+
 def parse_preset(filepath: str | Path) -> dict:
     data = Path(filepath).read_bytes()
 
@@ -16,17 +19,9 @@ def parse_preset(filepath: str | Path) -> dict:
     if magic != b"XferJson":
         raise ValueError(f"Not a Serum 2 preset: bad magic {magic!r}")
 
-    json_start = data.find(b"{")
-    depth = 0
-    json_end = 0
-    for i in range(json_start, len(data)):
-        if data[i:i+1] == b"{":
-            depth += 1
-        elif data[i:i+1] == b"}":
-            depth -= 1
-        if depth == 0:
-            json_end = i + 1
-            break
+    json_len = struct.unpack("<H", data[9:11])[0]
+    json_start = _HEADER_SIZE
+    json_end = json_start + json_len
 
     header = json.loads(data[json_start:json_end])
     after_json = data[json_end:]
