@@ -4,9 +4,12 @@ CLI and Python API for reading, writing, editing, and generating [Serum 2](https
 
 - Reverse-engineered Serum 2 `.SerumPreset` binary format (XferJson + CBOR + Zstandard)
 - Full read/write cycle with byte-level fidelity
-- 20+ CLI commands for every aspect of preset manipulation
+- 30+ CLI commands for every aspect of preset manipulation
 - 150+ parameter aliases for human-friendly editing
+- Wavetable browsing (288 factory tables) and noise sample assignment (900+ samples)
+- Arpeggiator editing with pattern/clip browsing
 - Variation generator with constrained randomization
+- ML/VAE generation — train on factory presets, sample latent space, interpolate between presets
 - Auto-detects Serum 2 preset folders (macOS + Windows)
 - Python API for scripting and automation
 
@@ -14,9 +17,12 @@ CLI and Python API for reading, writing, editing, and generating [Serum 2](https
 
 ```bash
 pip install -e .
+
+# For ML/VAE features (optional):
+pip install -e ".[ml]"
 ```
 
-Requires Python 3.11+. Dependencies: `cbor2`, `click`, `zstandard`.
+Requires Python 3.11+. Dependencies: `cbor2`, `click`, `zstandard`. ML features additionally require `torch` and `numpy`.
 
 ## Quick start
 
@@ -79,6 +85,27 @@ serum2 search acid --author "Matt"
 | `serum2 env set <preset> <idx>` | Set ADSR |
 | `serum2 lfo list <preset>` | Show LFOs |
 | `serum2 lfo set <preset> <idx>` | Set LFO params |
+| `serum2 wt list [-c category]` | Browse wavetables |
+| `serum2 wt get <preset> <osc>` | Show oscillator's wavetable |
+| `serum2 wt set <preset> <osc> <table>` | Assign wavetable |
+| `serum2 noise list [-c category]` | Browse noise samples |
+| `serum2 noise get <preset> <osc>` | Show noise sample |
+| `serum2 noise set <preset> <osc> <sample>` | Assign noise sample |
+| `serum2 arp get <preset>` | Show arp state |
+| `serum2 arp set <preset> --enable --clip N` | Configure arp |
+| `serum2 arp patterns` | List .XferArp files |
+| `serum2 arp clips` | List .XferClip files |
+
+### ML/VAE
+
+Requires `pip install -e ".[ml]"`.
+
+| Command | Description |
+|---------|-------------|
+| `serum2 ml train [--epochs N]` | Train VAE on factory presets |
+| `serum2 ml generate <model> -n N` | Sample presets from latent space |
+| `serum2 ml interpolate <model> <a> <b>` | Interpolate between presets |
+| `serum2 ml similar <model> <preset>` | Find similar presets |
 
 ## Parameter aliases
 
@@ -133,8 +160,35 @@ p2.save("variant.SerumPreset")
 # Batch generate
 batch_generate("template.SerumPreset", "./output", count=20, intensity=0.6, seed=42)
 
+# Wavetables and noise samples
+from serum2 import find_wavetables, find_noise_samples
+tables = find_wavetables(category="Analog")  # 288 factory tables
+p.set_wavetable(0, "Analog/Acid.wav")
+p.set_noise(3, "Analog/BrightWhite.wav")
+
+# Arpeggiator
+p.set_arp(enabled=True, clip_id=3)
+
 # Browse
 presets = find_presets()  # Auto-detects Serum 2 folder
+```
+
+### ML/VAE (requires `pip install -e ".[ml]"`)
+
+```python
+from serum2.ml import train_vae, load_model, sample, interpolate, find_similar
+
+# Train on factory presets
+model, metadata = train_vae("/path/to/presets", epochs=100, latent_dim=32)
+
+# Generate from latent space
+new_presets = sample(model, metadata, n=10)
+
+# Interpolate between two presets
+steps = interpolate(model, metadata, preset_a, preset_b, steps=8)
+
+# Find similar presets
+similar = find_similar(model, metadata, target, all_presets, n=5)
 ```
 
 ## Generator

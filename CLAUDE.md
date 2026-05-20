@@ -37,6 +37,13 @@ serum2 lfo list/set                # LFOs (1-10)
 serum2 diff <a> <b>                # Compare presets
 serum2 export/import               # JSON round-trip
 serum2 enums [category]            # Valid enum values
+serum2 wt list/get/set             # Wavetable management (288 factory tables)
+serum2 noise list/get/set          # Noise sample assignment (900+ samples)
+serum2 arp get/set/patterns/clips  # Arpeggiator editing
+serum2 ml train                    # Train VAE on factory presets
+serum2 ml generate <model> -n 10   # Sample from latent space
+serum2 ml interpolate <model> a b  # Interpolate between presets
+serum2 ml similar <model> <preset> # Find similar presets
 ```
 
 ## Python API
@@ -52,6 +59,9 @@ p.add_mod("LFO0", "filter.freq", amount=50.0)
 p.set_envelope(0, attack=0.01, decay=0.3, sustain=0.5, release=0.4)
 p.set_lfo(0, rate=0.5, mode="Free")
 p.add_fx("FXDistortion", {"kParamDrive": 50, "kParamMode": "kSoftClip"})
+p.set_wavetable(0, "Analog/Acid.wav")
+p.set_noise(3, "Analog/BrightWhite.wav")
+p.set_arp(enabled=True, clip_id=3)
 p.save("output.SerumPreset")
 ```
 
@@ -68,3 +78,13 @@ Run `serum2 enums` to see all categories. Key ones: warp modes (16), voice filte
 - Mac: `/Library/Audio/Presets/Xfer Records/Serum 2 Presets/Presets/`
 - Windows: `~/Documents/Xfer/Serum 2 Presets/Presets/`
 - User presets go in the `User/` subfolder
+- Tables (wavetables): `../Tables/` (sibling of Presets/)
+- Noise samples: `../Samples/Factory Non-Tonal/Noises/`
+- Arp patterns: `../Arp Patterns/` (.XferArp files)
+- Clips: `../Clips/` (.XferClip files)
+
+## ML/VAE
+
+Install: `pip install -e ".[ml]"` (requires torch + numpy)
+
+Train a VAE on all factory presets, then sample the latent space or interpolate between presets. The feature vector (98 dims) includes filter, oscillator, envelope, LFO, macro params + one-hot encoded categorical params (filter type, warp modes). Template presets provide the structural skeleton (FX chain, mod matrix, wavetables) that the VAE doesn't model.
