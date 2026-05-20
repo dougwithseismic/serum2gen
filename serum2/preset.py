@@ -15,7 +15,7 @@ HEADER_ALIASES = {
     "name": "presetName",
     "author": "presetAuthor",
     "description": "presetDescription",
-    "tags": "presetTags",
+    "tags": "tags",
 }
 
 PARAM_ALIASES = {
@@ -127,11 +127,11 @@ class Preset:
 
     @property
     def tags(self) -> list[str]:
-        return self.header.get("presetTags", [])
+        return self.header.get("tags", [])
 
     @tags.setter
     def tags(self, value: list[str]):
-        self.header["presetTags"] = value
+        self.header["tags"] = value
 
     def get(self, path: str, default=None):
         lower = path.lower().strip()
@@ -158,7 +158,7 @@ class Preset:
         lower = path.lower().strip()
         if lower in HEADER_ALIASES:
             header_key = HEADER_ALIASES[lower]
-            if header_key == "presetTags" and isinstance(value, str):
+            if header_key == "tags" and isinstance(value, str):
                 value = [t.strip() for t in value.split(",")]
             self.header[header_key] = value
             if header_key == "presetName":
