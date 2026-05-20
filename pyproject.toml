@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serum2"
+version = "0.1.0"
+description = "CLI and Python API for Serum 2 preset manipulation"
+requires-python = ">=3.11"
+dependencies = [
+    "cbor2>=5.6",
+    "click>=8.1",
+    "zstandard>=0.22",
+]
+
+[project.scripts]
+serum2 = "serum2.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["serum2*"]

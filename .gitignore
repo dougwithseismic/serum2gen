@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.so
+.DS_Store
+.env
+*.SerumPreset
+presets/
+output/
+.claude/
+
+# Research files (not part of the clean package)
+serum_parser.py
+reese_generator.py
