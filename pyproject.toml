@@ -13,6 +13,9 @@ dependencies = [
     "zstandard>=0.22",
 ]
 
+[project.optional-dependencies]
+ml = ["torch>=2.0", "numpy>=1.24"]
+
 [project.scripts]
 serum2 = "serum2.cli:cli"
 

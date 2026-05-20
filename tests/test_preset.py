@@ -607,3 +607,109 @@ class TestResolveAlias:
 
     def test_case_insensitive(self):
         assert _resolve_alias("FILTER.FREQ") == "VoiceFilter0.plainParams.kParamFreq"
+
+
+# ── Wavetable management ───────────────────────────────────────────
+
+
+class TestWavetableManagement:
+    """Tests for get_wavetable and set_wavetable."""
+
+    def test_get_wavetable_existing(self, minimal_preset):
+        assert minimal_preset.get_wavetable(0) == "Analog/Basic Shapes.wav"
+
+    def test_get_wavetable_osc1(self, minimal_preset):
+        assert minimal_preset.get_wavetable(1) == "Digital/Reese.wav"
+
+    def test_get_wavetable_nonexistent_returns_none(self, minimal_preset):
+        assert minimal_preset.get_wavetable(2) is None
+
+    def test_set_wavetable_overwrites(self, minimal_preset):
+        minimal_preset.set_wavetable(0, "Digital/Gritty.wav")
+        assert minimal_preset.get_wavetable(0) == "Digital/Gritty.wav"
+
+    def test_set_wavetable_creates_structure(self, minimal_preset):
+        """Setting wavetable on an osc with no WTOsc creates the dict."""
+        minimal_preset.set_wavetable(3, "Spectral/Test.wav")
+        assert minimal_preset.get_wavetable(3) == "Spectral/Test.wav"
+
+    def test_set_wavetable_round_trip(self, minimal_preset):
+        minimal_preset.set_wavetable(0, "S2 Tables/Analog/Saw Drift.wav")
+        assert minimal_preset.get_wavetable(0) == "S2 Tables/Analog/Saw Drift.wav"
+
+
+# ── Noise sample management ────────────────────────────────────────
+
+
+class TestNoiseManagement:
+    """Tests for get_noise and set_noise."""
+
+    def test_get_noise_nonexistent_returns_none(self, minimal_preset):
+        assert minimal_preset.get_noise(0) is None
+
+    def test_set_noise_creates_structure(self, minimal_preset):
+        minimal_preset.set_noise(0, "Organics/AC hum1.wav")
+        assert minimal_preset.get_noise(0) == "Organics/AC hum1.wav"
+
+    def test_set_noise_preserves_existing_metadata(self, minimal_preset):
+        """Setting noise path preserves detuneFactor if already present."""
+        osc = minimal_preset.params.setdefault("Oscillator0", {})
+        osc["NoiseOsc0"] = {
+            "relativePathToNoiseSample": "old.wav",
+            "detuneFactor": 0.47,
+            "numChannels": 1,
+        }
+        minimal_preset.set_noise(0, "new.wav")
+        noise = minimal_preset.params["Oscillator0"]["NoiseOsc0"]
+        assert noise["relativePathToNoiseSample"] == "new.wav"
+        assert noise["detuneFactor"] == 0.47
+
+    def test_set_noise_round_trip(self, minimal_preset):
+        minimal_preset.set_noise(2, "Analog/buzz.wav")
+        assert minimal_preset.get_noise(2) == "Analog/buzz.wav"
+
+
+# ── Arpeggiator ────────────────────────────────────────────────────
+
+
+class TestArpeggiator:
+    """Tests for get_arp and set_arp."""
+
+    def test_get_arp_default(self, minimal_preset):
+        """Preset with no Arp0 returns disabled state."""
+        a = minimal_preset.get_arp()
+        assert a["enabled"] is False
+        assert a["clip_id"] is None
+
+    def test_set_arp_enable(self, minimal_preset):
+        minimal_preset.set_arp(enabled=True)
+        a = minimal_preset.get_arp()
+        assert a["enabled"] is True
+
+    def test_set_arp_disable(self, minimal_preset):
+        minimal_preset.set_arp(enabled=True)
+        minimal_preset.set_arp(enabled=False)
+        a = minimal_preset.get_arp()
+        assert a["enabled"] is False
+
+    def test_set_arp_clip_id(self, minimal_preset):
+        minimal_preset.set_arp(enabled=True, clip_id=5.0)
+        a = minimal_preset.get_arp()
+        assert a["enabled"] is True
+        assert a["clip_id"] == 5.0
+
+    def test_set_arp_round_trip(self, minimal_preset):
+        minimal_preset.set_arp(enabled=True, clip_id=3.0, key_zone_max=126.0, launch_quantize=9.0)
+        a = minimal_preset.get_arp()
+        assert a["enabled"] is True
+        assert a["clip_id"] == 3.0
+        assert a["key_zone_max"] == 126.0
+        assert a["launch_quantize"] == 9.0
+
+    def test_set_arp_partial_update(self, minimal_preset):
+        """Setting only clip_id doesn't change other params."""
+        minimal_preset.set_arp(enabled=True, clip_id=2.0, key_zone_max=100.0)
+        minimal_preset.set_arp(clip_id=5.0)
+        a = minimal_preset.get_arp()
+        assert a["clip_id"] == 5.0
+        assert a["key_zone_max"] == 100.0

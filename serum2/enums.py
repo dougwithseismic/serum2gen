@@ -39,6 +39,7 @@ LFO_TYPES = ["Path", "Lorenz", "Rossler", "RandomSH"]
 
 LFO_MODES = ["Free", "Envelope", "Trigger"]
 
+# Static fallback list — prefer paths.find_wavetables() when Serum 2 is installed.
 WAVETABLES = [
     "S2 Tables/Default Shapes.wav",
     "Analog/Basic Shapes.wav", "Analog/Basic Mg.wav", "Analog/Basic Mini.wav",

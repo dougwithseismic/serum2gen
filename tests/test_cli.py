@@ -537,6 +537,164 @@ class TestSearchCommand:
 # ── version ──────────────────────────────────────────────────────────
 
 
+# ── wt commands ─────────────────────────────────────────────────────
+
+
+class TestWtCommands:
+
+    def test_wt_list_no_serum(self, runner):
+        """wt list fails gracefully when no Serum 2 installed."""
+        from unittest.mock import patch
+        with patch("serum2.cli.find_wavetables", return_value=[]):
+            result = runner.invoke(cli, ["wt", "list"])
+            assert result.exit_code != 0
+            assert "No wavetables found" in result.output
+
+    def test_wt_list_with_data(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_wavetables", return_value=["Analog/Saw.wav", "Digital/FM.wav"]):
+            result = runner.invoke(cli, ["wt", "list"])
+            assert result.exit_code == 0
+            assert "Analog/Saw.wav" in result.output
+            assert "2 wavetables" in result.output
+
+    def test_wt_list_with_category(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_wavetables", return_value=["Analog/Saw.wav"]):
+            result = runner.invoke(cli, ["wt", "list", "--category", "Analog"])
+            assert result.exit_code == 0
+            assert "Analog/Saw.wav" in result.output
+
+    @requires_factory_presets
+    def test_wt_get(self, runner):
+        result = runner.invoke(cli, ["wt", "get", str(FACTORY_BASS_PRESET), "1"])
+        assert result.exit_code == 0
+        assert "OSC 1" in result.output
+
+    @requires_factory_presets
+    def test_wt_set(self, runner, writable_preset, tmp_path):
+        out = tmp_path / "wt_set.SerumPreset"
+        result = runner.invoke(cli, [
+            "wt", "set", str(writable_preset), "1", "Digital/Reese.wav",
+            "-o", str(out),
+        ])
+        assert result.exit_code == 0
+        assert "wavetable set to" in result.output
+        p = Preset.load(out)
+        assert p.get_wavetable(0) == "Digital/Reese.wav"
+
+
+# ── noise commands ──────────────────────────────────────────────────
+
+
+class TestNoiseCommands:
+
+    def test_noise_list_no_serum(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_noise_samples", return_value=[]):
+            result = runner.invoke(cli, ["noise", "list"])
+            assert result.exit_code != 0
+            assert "No noise samples found" in result.output
+
+    def test_noise_list_with_data(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_noise_samples", return_value=["Analog/buzz.wav", "Organics/hum.wav"]):
+            result = runner.invoke(cli, ["noise", "list"])
+            assert result.exit_code == 0
+            assert "Analog/buzz.wav" in result.output
+            assert "2 noise samples" in result.output
+
+    def test_noise_list_with_category(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_noise_samples", return_value=["Analog/buzz.wav"]):
+            result = runner.invoke(cli, ["noise", "list", "--category", "Analog"])
+            assert result.exit_code == 0
+
+    @requires_factory_presets
+    def test_noise_get(self, runner):
+        result = runner.invoke(cli, ["noise", "get", str(FACTORY_BASS_PRESET), "1"])
+        assert result.exit_code == 0
+        assert "OSC 1" in result.output
+
+    @requires_factory_presets
+    def test_noise_set(self, runner, writable_preset, tmp_path):
+        out = tmp_path / "noise_set.SerumPreset"
+        result = runner.invoke(cli, [
+            "noise", "set", str(writable_preset), "1", "Organics/AC hum1.wav",
+            "-o", str(out),
+        ])
+        assert result.exit_code == 0
+        assert "noise sample set to" in result.output
+        p = Preset.load(out)
+        assert p.get_noise(0) == "Organics/AC hum1.wav"
+
+
+# ── arp commands ────────────────────────────────────────────────────
+
+
+class TestArpCommands:
+
+    @requires_factory_presets
+    def test_arp_get(self, runner):
+        result = runner.invoke(cli, ["arp", "get", str(FACTORY_BASS_PRESET)])
+        assert result.exit_code == 0
+        assert "Enabled" in result.output
+
+    @requires_factory_presets
+    def test_arp_set_enable(self, runner, writable_preset, tmp_path):
+        out = tmp_path / "arp_enable.SerumPreset"
+        result = runner.invoke(cli, [
+            "arp", "set", str(writable_preset), "--enable", "--clip", "5",
+            "-o", str(out),
+        ])
+        assert result.exit_code == 0
+        assert "Arp updated" in result.output
+        p = Preset.load(out)
+        a = p.get_arp()
+        assert a["enabled"] is True
+        assert a["clip_id"] == 5.0
+
+    @requires_factory_presets
+    def test_arp_set_disable(self, runner, writable_preset, tmp_path):
+        out = tmp_path / "arp_disable.SerumPreset"
+        result = runner.invoke(cli, [
+            "arp", "set", str(writable_preset), "--disable",
+            "-o", str(out),
+        ])
+        assert result.exit_code == 0
+
+    def test_arp_patterns_no_serum(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_arp_patterns", return_value=[]):
+            result = runner.invoke(cli, ["arp", "patterns"])
+            assert result.exit_code != 0
+            assert "No arp patterns found" in result.output
+
+    def test_arp_patterns_with_data(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_arp_patterns", return_value=["pattern1.XferArp"]):
+            result = runner.invoke(cli, ["arp", "patterns"])
+            assert result.exit_code == 0
+            assert "pattern1.XferArp" in result.output
+
+    def test_arp_clips_no_serum(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_clips", return_value=[]):
+            result = runner.invoke(cli, ["arp", "clips"])
+            assert result.exit_code != 0
+            assert "No clips found" in result.output
+
+    def test_arp_clips_with_data(self, runner):
+        from unittest.mock import patch
+        with patch("serum2.cli.find_clips", return_value=["clip1.XferClip"]):
+            result = runner.invoke(cli, ["arp", "clips"])
+            assert result.exit_code == 0
+            assert "clip1.XferClip" in result.output
+
+
+# ── version ──────────────────────────────────────────────────────────
+
+
 class TestVersion:
     def test_version(self, runner):
         result = runner.invoke(cli, ["--version"])

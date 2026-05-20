@@ -12,9 +12,21 @@ from .modulation import (
 )
 from .enums import (
     WARP_MODES, VOICE_FILTER_TYPES, BASIC_VOICE_FILTER_TYPES,
-    FX_FILTER_TYPES, DISTORTION_MODES, WAVETABLES,
+    FX_FILTER_TYPES, DISTORTION_MODES, WAVETABLES as _STATIC_WAVETABLES,
     LFO_TYPES, FX_TYPE_IDS,
 )
+from .paths import find_wavetables as _find_wavetables
+
+
+def _get_wavetables() -> list[str]:
+    """Return available wavetables, preferring the live filesystem scan."""
+    try:
+        live = _find_wavetables()
+        if live:
+            return live
+    except Exception:
+        pass
+    return _STATIC_WAVETABLES
 
 MACRO_NAMES = [
     "CUTOFF", "RESONANCE", "DRIVE", "WARP", "DETUNE",
@@ -129,10 +141,11 @@ def generate_variation(
     preset = template.clone()
     p = preset.params
 
+    wavetables = _get_wavetables()
     for oi in [0, 1]:
         wt = p.get(f"Oscillator{oi}", {}).get(f"WTOsc{oi}", {})
         if "relativePathToWT" in wt and random.random() < intensity * 0.8:
-            wt["relativePathToWT"] = random.choice(WAVETABLES)
+            wt["relativePathToWT"] = random.choice(wavetables)
 
     for oi in [0, 1]:
         osc_pp = p.get(f"Oscillator{oi}", {}).get("plainParams", "default")

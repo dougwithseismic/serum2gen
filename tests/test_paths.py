@@ -10,6 +10,12 @@ from serum2.paths import (
     get_user_folder,
     find_presets,
     resolve_preset,
+    get_tables_root,
+    find_wavetables,
+    get_noises_root,
+    find_noise_samples,
+    find_arp_patterns,
+    find_clips,
     SERUM2_PRESET_DIRS,
 )
 from tests.conftest import requires_factory_presets, FACTORY_BASS_PRESET, FACTORY_ROOT
@@ -137,3 +143,154 @@ class TestResolvePreset:
         f.touch()
         result = resolve_preset(str(f))
         assert result == f
+
+
+# ── get_tables_root ─────────────────────────────────────────────────
+
+
+class TestGetTablesRoot:
+    """Tests for get_tables_root()."""
+
+    def test_returns_none_when_no_preset_root(self):
+        with patch("serum2.paths.get_preset_root", return_value=None):
+            assert get_tables_root() is None
+
+    def test_returns_none_when_tables_dir_missing(self, tmp_path):
+        """If Tables/ doesn't exist as sibling, returns None."""
+        presets = tmp_path / "Presets"
+        presets.mkdir()
+        with patch("serum2.paths.get_preset_root", return_value=presets):
+            assert get_tables_root() is None
+
+    def test_returns_tables_path_when_exists(self, tmp_path):
+        presets = tmp_path / "Presets"
+        presets.mkdir()
+        tables = tmp_path / "Tables"
+        tables.mkdir()
+        with patch("serum2.paths.get_preset_root", return_value=presets):
+            result = get_tables_root()
+            assert result == tables
+
+
+# ── find_wavetables ─────────────────────────────────────────────────
+
+
+class TestFindWavetables:
+    """Tests for find_wavetables()."""
+
+    def test_returns_empty_for_none_root(self):
+        with patch("serum2.paths.get_tables_root", return_value=None):
+            assert find_wavetables() == []
+
+    def test_finds_wav_files(self, tmp_path):
+        (tmp_path / "Analog").mkdir()
+        (tmp_path / "Analog" / "Saw.wav").touch()
+        (tmp_path / "Analog" / "Square.wav").touch()
+        (tmp_path / "readme.txt").touch()
+        result = find_wavetables(root=tmp_path)
+        assert result == ["Analog/Saw.wav", "Analog/Square.wav"]
+
+    def test_category_filter(self, tmp_path):
+        (tmp_path / "Analog").mkdir()
+        (tmp_path / "Digital").mkdir()
+        (tmp_path / "Analog" / "Saw.wav").touch()
+        (tmp_path / "Digital" / "FM.wav").touch()
+        result = find_wavetables(root=tmp_path, category="Analog")
+        assert result == ["Analog/Saw.wav"]
+        assert "Digital/FM.wav" not in result
+
+    def test_category_nonexistent_returns_empty(self, tmp_path):
+        result = find_wavetables(root=tmp_path, category="Nonexistent")
+        assert result == []
+
+
+# ── get_noises_root ─────────────────────────────────────────────────
+
+
+class TestGetNoisesRoot:
+    """Tests for get_noises_root()."""
+
+    def test_returns_none_when_no_preset_root(self):
+        with patch("serum2.paths.get_preset_root", return_value=None):
+            assert get_noises_root() is None
+
+    def test_returns_none_when_noises_dir_missing(self, tmp_path):
+        presets = tmp_path / "Presets"
+        presets.mkdir()
+        with patch("serum2.paths.get_preset_root", return_value=presets):
+            assert get_noises_root() is None
+
+    def test_returns_noises_path_when_exists(self, tmp_path):
+        presets = tmp_path / "Presets"
+        presets.mkdir()
+        noises = tmp_path / "Samples" / "Factory Non-Tonal" / "Noises"
+        noises.mkdir(parents=True)
+        with patch("serum2.paths.get_preset_root", return_value=presets):
+            result = get_noises_root()
+            assert result == noises
+
+
+# ── find_noise_samples ──────────────────────────────────────────────
+
+
+class TestFindNoiseSamples:
+    """Tests for find_noise_samples()."""
+
+    def test_returns_empty_for_none_root(self):
+        with patch("serum2.paths.get_noises_root", return_value=None):
+            assert find_noise_samples() == []
+
+    def test_finds_multiple_extensions(self, tmp_path):
+        (tmp_path / "hum.wav").touch()
+        (tmp_path / "crackle.aif").touch()
+        (tmp_path / "hiss.flac").touch()
+        (tmp_path / "notes.txt").touch()
+        result = find_noise_samples(root=tmp_path)
+        assert "hum.wav" in result
+        assert "crackle.aif" in result
+        assert "hiss.flac" in result
+        assert "notes.txt" not in result
+
+    def test_category_filter(self, tmp_path):
+        (tmp_path / "Analog").mkdir()
+        (tmp_path / "Organics").mkdir()
+        (tmp_path / "Analog" / "buzz.wav").touch()
+        (tmp_path / "Organics" / "hum.wav").touch()
+        result = find_noise_samples(root=tmp_path, category="Analog")
+        assert result == ["Analog/buzz.wav"]
+
+
+# ── find_arp_patterns ───────────────────────────────────────────────
+
+
+class TestFindArpPatterns:
+    """Tests for find_arp_patterns()."""
+
+    def test_returns_empty_for_nonexistent_root(self, tmp_path):
+        result = find_arp_patterns(root=tmp_path / "nonexistent")
+        assert result == []
+
+    def test_finds_xferarp_files(self, tmp_path):
+        (tmp_path / "pattern1.XferArp").touch()
+        (tmp_path / "pattern2.XferArp").touch()
+        (tmp_path / "other.txt").touch()
+        result = find_arp_patterns(root=tmp_path)
+        assert result == ["pattern1.XferArp", "pattern2.XferArp"]
+
+
+# ── find_clips ──────────────────────────────────────────────────────
+
+
+class TestFindClips:
+    """Tests for find_clips()."""
+
+    def test_returns_empty_for_nonexistent_root(self, tmp_path):
+        result = find_clips(root=tmp_path / "nonexistent")
+        assert result == []
+
+    def test_finds_xferclip_files(self, tmp_path):
+        (tmp_path / "clip1.XferClip").touch()
+        (tmp_path / "clip2.XferClip").touch()
+        (tmp_path / "other.txt").touch()
+        result = find_clips(root=tmp_path)
+        assert result == ["clip1.XferClip", "clip2.XferClip"]

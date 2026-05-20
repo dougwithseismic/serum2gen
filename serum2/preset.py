@@ -363,6 +363,66 @@ class Preset:
 
         return result
 
+    # ── Wavetable management ──────────────────────────────────────────
+
+    def get_wavetable(self, osc_idx: int) -> str | None:
+        """Return the relativePathToWT for the given oscillator, or None."""
+        return (
+            self.params
+            .get(f"Oscillator{osc_idx}", {})
+            .get(f"WTOsc{osc_idx}", {})
+            .get("relativePathToWT")
+        )
+
+    def set_wavetable(self, osc_idx: int, path: str) -> None:
+        """Set the relativePathToWT for the given oscillator."""
+        osc = self.params.setdefault(f"Oscillator{osc_idx}", {})
+        wt = osc.setdefault(f"WTOsc{osc_idx}", {})
+        wt["relativePathToWT"] = path
+
+    # ── Noise sample management ─────────────────────────────────────
+
+    def get_noise(self, osc_idx: int) -> str | None:
+        """Return the relativePathToNoiseSample for the given oscillator, or None."""
+        return (
+            self.params
+            .get(f"Oscillator{osc_idx}", {})
+            .get(f"NoiseOsc{osc_idx}", {})
+            .get("relativePathToNoiseSample")
+        )
+
+    def set_noise(self, osc_idx: int, path: str) -> None:
+        """Set the relativePathToNoiseSample for the given oscillator,
+        preserving existing metadata (detuneFactor, etc.)."""
+        osc = self.params.setdefault(f"Oscillator{osc_idx}", {})
+        noise = osc.setdefault(f"NoiseOsc{osc_idx}", {})
+        noise["relativePathToNoiseSample"] = path
+
+    # ── Arpeggiator ─────────────────────────────────────────────────
+
+    _ARP_PARAM_MAP = {
+        "enabled": "kParamEnabled",
+        "clip_id": "kParamActiveClipID",
+        "key_zone_max": "kParamKeyZoneMax",
+        "launch_quantize": "kParamLaunchQuantize",
+    }
+
+    def get_arp(self) -> dict:
+        """Return arpeggiator state as a friendly dict."""
+        pp = self._get_plain_params("Arp0")
+        return {
+            "enabled": pp.get("kParamEnabled", 0.0) == 1.0,
+            "clip_id": pp.get("kParamActiveClipID"),
+            "key_zone_max": pp.get("kParamKeyZoneMax"),
+            "launch_quantize": pp.get("kParamLaunchQuantize"),
+        }
+
+    def set_arp(self, **kwargs) -> None:
+        """Set arpeggiator params. Accepts: enabled, clip_id, key_zone_max, launch_quantize."""
+        if "enabled" in kwargs and kwargs["enabled"] is not None:
+            kwargs["enabled"] = 1.0 if kwargs["enabled"] else 0.0
+        self._set_plain_params("Arp0", self._ARP_PARAM_MAP, **kwargs)
+
     def summary(self) -> dict:
         oscs = [self.get_oscillator(i) for i in range(5)]
         active_oscs = [o for o in oscs if o.get("enabled")]
