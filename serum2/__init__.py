@@ -3,7 +3,14 @@
 from .preset import Preset
 from .core import parse_preset, write_preset, deep_clone
 from .paths import get_preset_root, get_user_folder, find_presets, resolve_preset
-from .generator import generate_variation, batch_generate
+
+
+def __getattr__(name):
+    if name in ("generate_variation", "batch_generate"):
+        from . import generator
+        return getattr(generator, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "Preset",

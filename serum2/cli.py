@@ -11,7 +11,7 @@ from .paths import get_preset_root, get_user_folder, find_presets, resolve_prese
 from .generator import batch_generate
 from .enums import (
     WARP_MODES, VOICE_FILTER_TYPES, FX_FILTER_TYPES,
-    DISTORTION_MODES, LFO_TYPES, FX_TYPE_IDS,
+    DISTORTION_MODES, LFO_TYPES, LFO_MODES, FX_TYPE_IDS,
 )
 from .modulation import SOURCE_NAMES, DEST_SHORTNAMES
 
@@ -455,7 +455,7 @@ def lfo_list(preset_path):
 @click.argument("preset_path")
 @click.argument("index", type=int)
 @click.option("--rate", type=float)
-@click.option("--mode", type=click.Choice(["Free", "Envelope", "Trigger"]))
+@click.option("--mode", type=click.Choice(LFO_MODES))
 @click.option("--type", "lfo_type", type=click.Choice(LFO_TYPES))
 @click.option("--smooth", type=float)
 @click.option("-o", "--output", help="Output path")
@@ -591,7 +591,7 @@ def _diff_section(name, a, b):
     if a == b:
         return
     click.echo(f"  {name}:")
-    all_keys = set(list(a.keys()) + list(b.keys())) if isinstance(a, dict) and isinstance(b, dict) else set()
+    all_keys = (a.keys() | b.keys()) if isinstance(a, dict) and isinstance(b, dict) else set()
     for k in sorted(all_keys):
         va = a.get(k) if isinstance(a, dict) else None
         vb = b.get(k) if isinstance(b, dict) else None
@@ -615,26 +615,30 @@ def search(query, path, filter_type, has_fx, author, limit):
         click.echo("Serum 2 preset folder not found.", err=True)
         sys.exit(1)
 
+    needs_parse = bool(author or filter_type or has_fx)
     results = []
     query_lower = query.lower()
     for preset_path in find_presets(root):
         if query_lower not in preset_path.stem.lower():
             continue
-        try:
-            p = Preset.load(preset_path)
-        except Exception:
-            continue
 
-        if author and author.lower() not in p.author.lower():
-            continue
-        if filter_type:
-            ft = p.get("filter.type")
-            if ft and filter_type.lower() not in str(ft).lower():
+        p = None
+        if needs_parse:
+            try:
+                p = Preset.load(preset_path)
+            except Exception:
                 continue
-        if has_fx:
-            fx_types = [f["type"] for f in p.fx_chain()]
-            if not any(has_fx.lower() in ft.lower() for ft in fx_types):
+
+            if author and author.lower() not in p.author.lower():
                 continue
+            if filter_type:
+                ft = p.get("filter.type")
+                if ft and filter_type.lower() not in str(ft).lower():
+                    continue
+            if has_fx:
+                fx_types = [f["type"] for f in p.fx_chain()]
+                if not any(has_fx.lower() in ft.lower() for ft in fx_types):
+                    continue
 
         rel = preset_path.relative_to(root) if preset_path.is_relative_to(root) else preset_path
         results.append((rel, p))
@@ -646,7 +650,7 @@ def search(query, path, filter_type, has_fx, author, limit):
         return
 
     for rel, p in results:
-        author_str = f"  [{p.author}]" if p.author else ""
+        author_str = f"  [{p.author}]" if p and p.author else ""
         click.echo(f"  {rel}{author_str}")
     click.echo(f"\n{len(results)} results")
 

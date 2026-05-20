@@ -100,7 +100,6 @@ class Preset:
     def header(self) -> dict:
         return self._data["header"]
 
-    # --- Name ---
     @property
     def name(self) -> str:
         return self.header.get("presetName", "")
@@ -134,7 +133,6 @@ class Preset:
     def tags(self, value: list[str]):
         self.header["presetTags"] = value
 
-    # --- Parameter get/set ---
     def get(self, path: str, default=None):
         lower = path.lower().strip()
         if lower in HEADER_ALIASES:
@@ -186,7 +184,21 @@ class Preset:
             value = _coerce_value(value)
         current[keys[-1]] = value
 
-    # --- Macros ---
+    def _get_plain_params(self, section: str) -> dict:
+        obj = self.params.get(section, {})
+        pp = obj.get("plainParams", {})
+        return {} if isinstance(pp, str) else pp
+
+    def _set_plain_params(self, section: str, param_map: dict, **kwargs):
+        obj = self.params.setdefault(section, {})
+        pp = obj.get("plainParams", {})
+        if isinstance(pp, str):
+            pp = {}
+        for k, v in kwargs.items():
+            if k in param_map and v is not None:
+                pp[param_map[k]] = v
+        obj["plainParams"] = pp
+
     def get_macro(self, idx: int) -> dict:
         macro = self.params.get(f"Macro{idx}", {})
         pp = macro.get("plainParams", {})
@@ -207,7 +219,6 @@ class Preset:
         if value is not None:
             pp["kParamValue"] = float(value)
 
-    # --- Modulation ---
     def list_mods(self) -> list[dict]:
         slots = []
         for i in range(64):
@@ -252,12 +263,20 @@ class Preset:
         for i in range(64):
             self.params[f"ModSlot{i}"] = {"plainParams": "default"}
 
-    # --- LFOs ---
+    _LFO_PARAM_MAP = {
+        "rate": "kParamRate", "mode": "kParamMode", "type": "kParamType",
+        "smooth": "kParamSmooth", "delay": "kParamDelay",
+        "rise": "kParamRise", "rate10x": "kParamRate10x",
+    }
+
+    _ENV_PARAM_MAP = {
+        "attack": "kParamAttack", "decay": "kParamDecay",
+        "sustain": "kParamSustain", "release": "kParamRelease",
+    }
+
     def get_lfo(self, idx: int) -> dict:
+        pp = self._get_plain_params(f"LFO{idx}")
         lfo = self.params.get(f"LFO{idx}", {})
-        pp = lfo.get("plainParams", {})
-        if isinstance(pp, str):
-            pp = {}
         return {
             "rate": pp.get("kParamRate"),
             "mode": pp.get("kParamMode"),
@@ -268,31 +287,10 @@ class Preset:
         }
 
     def set_lfo(self, idx: int, **kwargs):
-        key = f"LFO{idx}"
-        lfo = self.params.setdefault(key, {})
-        pp = lfo.get("plainParams", {})
-        if isinstance(pp, str):
-            pp = {}
-        param_map = {
-            "rate": "kParamRate",
-            "mode": "kParamMode",
-            "type": "kParamType",
-            "smooth": "kParamSmooth",
-            "delay": "kParamDelay",
-            "rise": "kParamRise",
-            "rate10x": "kParamRate10x",
-        }
-        for k, v in kwargs.items():
-            if k in param_map and v is not None:
-                pp[param_map[k]] = v
-        lfo["plainParams"] = pp
+        self._set_plain_params(f"LFO{idx}", self._LFO_PARAM_MAP, **kwargs)
 
-    # --- Envelopes ---
     def get_envelope(self, idx: int) -> dict:
-        env = self.params.get(f"Env{idx}", {})
-        pp = env.get("plainParams", {})
-        if isinstance(pp, str):
-            pp = {}
+        pp = self._get_plain_params(f"Env{idx}")
         return {
             "attack": pp.get("kParamAttack"),
             "decay": pp.get("kParamDecay"),
@@ -301,23 +299,8 @@ class Preset:
         }
 
     def set_envelope(self, idx: int, **kwargs):
-        key = f"Env{idx}"
-        env = self.params.setdefault(key, {})
-        pp = env.get("plainParams", {})
-        if isinstance(pp, str):
-            pp = {}
-        param_map = {
-            "attack": "kParamAttack",
-            "decay": "kParamDecay",
-            "sustain": "kParamSustain",
-            "release": "kParamRelease",
-        }
-        for k, v in kwargs.items():
-            if k in param_map and v is not None:
-                pp[param_map[k]] = float(v)
-        env["plainParams"] = pp
+        self._set_plain_params(f"Env{idx}", self._ENV_PARAM_MAP, **kwargs)
 
-    # --- FX ---
     def fx_chain(self) -> list[dict]:
         fx_list = self.params.get("FXRack0", {}).get("FX", [])
         result = []
@@ -353,7 +336,6 @@ class Preset:
         if 0 <= index < len(fx_list):
             fx_list.pop(index)
 
-    # --- Oscillators ---
     def get_oscillator(self, idx: int) -> dict:
         osc = self.params.get(f"Oscillator{idx}", {})
         pp = osc.get("plainParams", "default")
@@ -381,7 +363,6 @@ class Preset:
 
         return result
 
-    # --- Summary ---
     def summary(self) -> dict:
         oscs = [self.get_oscillator(i) for i in range(5)]
         active_oscs = [o for o in oscs if o.get("enabled")]
@@ -415,7 +396,7 @@ class Preset:
             "mod_count": len(mods),
             "fx": [{"type": f["type"]} for f in self.fx_chain()],
             "envelopes": {f"env{i}": self.get_envelope(i) for i in range(4)},
-            "lfos": {f"lfo{i}": self.get_lfo(i) for i in range(10) if self.get_lfo(i)["rate"] is not None},
+            "lfos": {f"lfo{i}": l for i in range(10) if (l := self.get_lfo(i))["rate"] is not None},
         }
 
     def to_json(self, indent: int = 2) -> str:

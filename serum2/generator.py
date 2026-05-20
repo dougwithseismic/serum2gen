@@ -1,6 +1,5 @@
 """Variation generator — creates preset variations from templates."""
 
-import hashlib
 import math
 import random
 from pathlib import Path
@@ -14,6 +13,7 @@ from .modulation import (
 from .enums import (
     WARP_MODES, VOICE_FILTER_TYPES, BASIC_VOICE_FILTER_TYPES,
     FX_FILTER_TYPES, DISTORTION_MODES, WAVETABLES,
+    LFO_TYPES, FX_TYPE_IDS,
 )
 
 MACRO_NAMES = [
@@ -94,7 +94,7 @@ def _activate_lfo(p, lfo_idx):
     }
 
     if is_chaos:
-        chaos_type = random.choice(["Lorenz", "Rossler", "RandomSH"])
+        chaos_type = random.choice([t for t in LFO_TYPES if t != "Path"])
         lfo_pp["kParamType"] = chaos_type
         lfo_pp["kParamRate"] = _rr((0.05, 0.5))
         if random.random() < 0.3:
@@ -129,13 +129,11 @@ def generate_variation(
     preset = template.clone()
     p = preset.params
 
-    # --- Wavetables ---
     for oi in [0, 1]:
         wt = p.get(f"Oscillator{oi}", {}).get(f"WTOsc{oi}", {})
         if "relativePathToWT" in wt and random.random() < intensity * 0.8:
             wt["relativePathToWT"] = random.choice(WAVETABLES)
 
-    # --- Oscillator params ---
     for oi in [0, 1]:
         osc_pp = p.get(f"Oscillator{oi}", {}).get("plainParams", "default")
         if isinstance(osc_pp, dict):
@@ -148,12 +146,10 @@ def generate_variation(
         if isinstance(wt_pp, dict) and random.random() < intensity * 0.7:
             wt_pp["kParamWarpMenu"] = random.choice(WARP_MODES)
 
-    # --- Sub osc ---
     osc4_pp = p.get("Oscillator4", {}).get("plainParams", "default")
     if isinstance(osc4_pp, dict) and "kParamVolume" in osc4_pp:
         osc4_pp["kParamVolume"] = _perturb(osc4_pp["kParamVolume"], (0.15, 0.85), intensity)
 
-    # --- Voice filter ---
     vf_pp = p.get("VoiceFilter0", {}).get("plainParams", "default")
     if isinstance(vf_pp, dict):
         current_type = vf_pp.get("kParamType", "")
@@ -168,7 +164,6 @@ def generate_variation(
         if "kParamVar" in vf_pp:
             vf_pp["kParamVar"] = _perturb(vf_pp["kParamVar"], (0, 100), intensity * 0.3)
 
-    # --- Activate multiple LFOs ---
     num_lfos = random.choices([3, 4, 5, 6, 8, 10], weights=[5, 15, 25, 25, 20, 10])[0]
     num_lfos = max(num_lfos, 2)
     active_lfo_sources = []
@@ -179,7 +174,6 @@ def generate_variation(
     p["LFO0"]["pathData"] = _generate_lfo_shape()
     p["LFO1"]["pathData"] = _generate_lfo_shape()
 
-    # --- Env0: add ADSR only if not already set ---
     env0 = p.get("Env0", {})
     env0_pp = env0.get("plainParams", {})
     if isinstance(env0_pp, str):
@@ -208,7 +202,6 @@ def generate_variation(
             "plainParams": {"kParamValue": _rr((0, 40)) if random.random() < 0.4 else 0.0},
         }
 
-    # --- Mod matrix from scratch ---
     for i in range(64):
         p[f"ModSlot{i}"] = {"plainParams": "default"}
 
@@ -297,7 +290,6 @@ def generate_variation(
         p[f"ModSlot{slot_idx}"] = build_mod_slot(src, dest, _rr((-80, 80)), random.random() < 0.3)
         slot_idx += 1
 
-    # --- FX chain tweaks ---
     for fx in p.get("FXRack0", {}).get("FX", []):
         if "FXDistortion" in fx:
             dp = fx["FXDistortion"].get("plainParams", {})
@@ -328,7 +320,6 @@ def generate_variation(
                 if "kParamLFXover" in up: up["kParamLFXover"] = _rr((50, 300))
                 if "kParamWidth" in up: up["kParamWidth"] = _rr((20, 80))
 
-    # --- Ensure width + compression ---
     fx_rack = p.get("FXRack0", {})
     fx_list = fx_rack.get("FX", [])
     fx_types_present = set()
@@ -347,7 +338,7 @@ def generate_variation(
                 }
             },
             "kUIParamMixOrGain": 0.0,
-            "type": 12,
+            "type": FX_TYPE_IDS["FXUtils"],
         })
     else:
         for fx in fx_list:
@@ -372,13 +363,12 @@ def generate_variation(
                 }
             },
             "kUIParamMixOrGain": 0.0,
-            "type": 10,
+            "type": FX_TYPE_IDS["FXComp"],
         })
 
     fx_rack["FX"] = fx_list
     p["FXRack0"] = fx_rack
 
-    # --- Arp (sometimes) ---
     if random.random() < intensity * 0.3:
         p["Arp0"] = {
             "plainParams": {
@@ -387,7 +377,6 @@ def generate_variation(
             }
         }
 
-    # --- Global ---
     g0_pp = p.get("Global0", {}).get("plainParams", "default")
     if isinstance(g0_pp, dict):
         if "kParamPortamentoTime" in g0_pp:
@@ -395,7 +384,6 @@ def generate_variation(
         if "kParamMasterVolume" in g0_pp:
             g0_pp["kParamMasterVolume"] = _perturb(g0_pp["kParamMasterVolume"], MASTER_VOLUME_RANGE, intensity)
 
-    # --- Header ---
     name = f"{name_prefix} - V{variation_id:03d}"
     preset.name = name
     preset.description = f"Generated variation #{variation_id}"

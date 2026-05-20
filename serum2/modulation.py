@@ -103,24 +103,24 @@ DEST_SHORTNAMES = {
 }
 
 
+_SOURCE_NAMES_LOWER = {k.lower(): v for k, v in SOURCE_NAMES.items()}
+_DEST_SHORTNAMES_LOWER = {k.lower(): v for k, v in DEST_SHORTNAMES.items()}
+
+
 def resolve_source(name: str) -> list[int]:
     key = name.strip()
     if key in SOURCE_NAMES:
         return [SOURCE_NAMES[key], 0]
-    upper = key.upper()
-    for k, v in SOURCE_NAMES.items():
-        if k.upper() == upper:
-            return [v, 0]
+    if (v := _SOURCE_NAMES_LOWER.get(key.lower())) is not None:
+        return [v, 0]
     raise ValueError(f"Unknown mod source: {name!r}. Valid: {', '.join(sorted(SOURCE_NAMES))}")
 
 
 def resolve_destination(name: str) -> dict:
     if name in DEST_SHORTNAMES:
         return dict(DEST_SHORTNAMES[name])
-    lower = name.lower()
-    for k, v in DEST_SHORTNAMES.items():
-        if k.lower() == lower:
-            return dict(v)
+    if (v := _DEST_SHORTNAMES_LOWER.get(name.lower())) is not None:
+        return dict(v)
     raise ValueError(f"Unknown mod dest: {name!r}. Valid: {', '.join(sorted(DEST_SHORTNAMES))}")
 
 

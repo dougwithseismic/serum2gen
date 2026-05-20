@@ -76,13 +76,10 @@ def write_preset(preset: dict, filepath: str | Path) -> None:
     out.extend(flags_header)
     out.extend(compressed)
 
-    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-    Path(filepath).write_bytes(bytes(out))
+    out_path = Path(filepath)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(bytes(out))
 
 
 def deep_clone(preset: dict) -> dict:
-    return {
-        "header": copy.deepcopy(preset["header"]),
-        "params": copy.deepcopy(preset["params"]),
-        "_meta": copy.deepcopy(preset["_meta"]),
-    }
+    return copy.deepcopy(preset)
